@@ -12,7 +12,8 @@
 *	05/03/17	Kunal Buch		Version 1.0 [Parallel Traversal]
 *	05/13/17	Kunal Buch		Version 1.1 [Parallel Traversal of vector length = 8 and clean read with read.tcl]
 *	05/27/17	Kunal Buch		Version 1.2 [Parallel Traversal of vector length = 16]
-*	06/07/27	Kunal Buch		Version 1.3	[Parallel Traversal of vector length = 128]
+*	06/07/17	Kunal Buch		Version 1.3	[Parallel Traversal of vector length = 128]
+*	07/15/17	Kunal Buch		Version 1.4 [Parallel Traversal of vector length = 16]
 *
 ********************************************************/
 `timescale 1 ns/1 ps
@@ -34,7 +35,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 	
 	
 	integer iter;
-	parameter size_range = 7;
+	parameter size_range = 9514;
 	
 	// internal signals local to the block
 	reg	[24:0]		offset;
@@ -107,18 +108,18 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 	reg 			range_next;
 	reg [24:0]		cache_line_no;
 	reg [5:0]		current_cached;
-	reg [7:0]		block_offset;
-	reg [7:0]		block_offset_flag_0;
-	reg [7:0]		block_offset_plus_one;
-	reg [7:0]		block_offset_plus_one_reg;
-	reg [7:0]		block_offset_reg;
+	reg [3:0]		block_offset;
+	reg [3:0]		block_offset_flag_0;
+	reg [3:0]		block_offset_plus_one;
+	reg [3:0]		block_offset_plus_one_reg;
+	reg [3:0]		block_offset_reg;
 	reg [1:0]		flag_1_or_2;
-	reg [7:0]		no_cached_blocks;
-	reg [7:0]		no_cached_blocks_int;
-	reg [7:0]		no_cached_blocks_flag_0;
-	reg [7:0]		no_cached_blocks_flag_1;
-	reg [7:0]		no_cached_blocks_flag_2;
-	reg [7:0]		no_cached_blocks_flag_2_prev;
+	reg [4:0]		no_cached_blocks;
+	reg [4:0]		no_cached_blocks_int;
+	reg [4:0]		no_cached_blocks_flag_0;
+	reg [4:0]		no_cached_blocks_flag_1;
+	reg [4:0]		no_cached_blocks_flag_2;
+	reg [4:0]		no_cached_blocks_flag_2_prev;
 	reg [1:0]		flag_2;
 	
 	reg check;
@@ -167,15 +168,15 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			end
 			else if(state == 1)
 			begin
-				if(block_offset_reg == 127)
+				if(block_offset_reg == 15)
 				begin
-					rd_address <= cache_line_no + 1;
+					rd_address <= rd_address + 1;
 				end
 				state <= 2;
 			end
 			else if(state == 2)
 			begin
-				if(block_offset_reg != 127)
+				if(block_offset_reg != 15)
 				begin
 					range <= cache[block_offset_plus_one_reg] - cache[block_offset_reg];
 					up_counter <= cache[block_offset_reg];
@@ -187,7 +188,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 					if(range_next == 0)
 					begin
 						range_next <= 1;
-						cache_temp <= cache[127];
+						cache_temp <= cache[15];
 					end
 					else if(range_next == 1)
 					begin
@@ -263,7 +264,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 4) ||
 								(block_offset_flag_0 == 1 && no_cached_blocks_flag_0 >= 3) ||
 								(block_offset_flag_0 == 2 && no_cached_blocks_flag_0 >= 2) ||
-								(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 1)
+								(block_offset_flag_0 == 3 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
 								if(block_mem_state_info_transition[3] == input_char)
@@ -725,7 +726,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 4) ||
 								(block_offset_flag_0 == 1 && no_cached_blocks_flag_0 >= 3) ||
 								(block_offset_flag_0 == 2 && no_cached_blocks_flag_0 >= 2) ||
-								(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 1)
+								(block_offset_flag_0 == 3 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
 								if(block_mem_state_info_transition[3] == input_char)
@@ -1173,7 +1174,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 4) ||
 								(block_offset_flag_0 == 1 && no_cached_blocks_flag_0 >= 3) ||
 								(block_offset_flag_0 == 2 && no_cached_blocks_flag_0 >= 2) ||
-								(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 1)
+								(block_offset_flag_0 == 3 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
 								if(block_mem_state_info_transition[3] == input_char)
@@ -1618,12 +1619,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 				else
 				begin
 					current <= ~(~next);
-					
-					/*if(next[iter] == 1)
-					begin
-						active[iter] <= active[iter] + 1;
-					end*/
-					
+			
 					for(iter = 0; iter < size_range; iter = iter+1)
 						if(next[iter] == 1)
 						begin
@@ -1646,12 +1642,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 				else
 				begin
 					current <= ~(~next);
-				
-					/*if(next[iter] == 1)
-					begin
-						active[iter] <= active[iter] + 1;
-					end*/
-					
+			
 					for(iter = 0; iter < size_range; iter = iter+1)
 						if(next[iter] == 1)
 						begin
@@ -1682,7 +1673,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 		if(current[i] == 1 && state ==0)
 		begin
 			rd_address_int = i;
-			block_offset = rd_address_int[3:0];
+			block_offset = rd_address_int[4:0];
 			block_offset_plus_one = block_offset + 1'b1;
 			cache_line_no = rd_address_int >> 4;
 		end
@@ -1693,7 +1684,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			//fetching next line and extarcting the useful blocks
 			
 			rd_address_int = offset + up_counter;
-			block_offset = rd_address_int[3:0];
+			block_offset = rd_address_int[4:0];
 			cache_line_no = rd_address_int >> 4;
 			
 			//checking if the no of useful blocks >==< range
@@ -1769,7 +1760,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 		end
 		else
 		begin
-			no_cached_blocks = 4'bz;
+			no_cached_blocks = 5'bz;
 			up_counter_int = 24'bz;
 			range_int = 24'bz;
 		end
