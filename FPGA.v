@@ -18,7 +18,7 @@
 ********************************************************/
 `timescale 1 ns/1 ps
 
-module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, input_char);
+module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, input_char, input_char_2);
 
 	// interface signals
 	input	[23:0]		size;
@@ -26,6 +26,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 	input 				clk;
 	input 				reset;
 	input	[7:0]		input_char;
+	input	[7:0]		input_char_2;
 	
 	output 	[16:0]		rd_address;
 	output 				input_char_flag;
@@ -35,7 +36,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 	
 	
 	integer iter;
-	parameter size_range = 9514;
+	parameter size_range = 7;
 	
 	// internal signals local to the block
 	reg	[24:0]		offset;
@@ -43,7 +44,10 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 	reg [23:0]		first;
 	// reg [9:0]		last;
 	reg [size_range - 1:0]			next;
+	reg [size_range - 1:0]			next_2;
 	reg [size_range - 1:0]			current;
+	reg [size_range - 1:0]			current_2;
+	reg [size_range - 1:0]			accepting;
 	
 	reg	[7:0]		block_mem_state_info_transition		[15:0];
 	reg	[23:0]		block_mem_state_info_target_state	[15:0];
@@ -58,6 +62,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 	reg 			flag_iter_check;
 	reg 			flag_check;
 	reg [23:0]		active 	[size_range - 1:0];
+	reg [23:0]		active_2 	[size_range - 1:0];
 	// reg 			flag_state_reset;
 	reg 			range_2_state;
 	reg 			range_1_state;
@@ -140,17 +145,21 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			
 			
 			current[size_range - 1:1] <= 0;
+			current_2[size_range - 1:1] <= 0;
 			next <= 0;
+			next_2 <= 0;
+			accepting <= 0;
 			
 			for(iter = 1; iter < size_range; iter = iter + 1)
 			begin
+				active_2[iter] <= 0;
 				active[iter] <= 0;
 			end
 			
 			current[0] <= 1;
-			//next[0] <= 0;
+			current_2[0] <= 1;
 			active[0] <= 1;
-			
+			active_2[0] <= 1;
 			
 			range <= 0;
 			flag_check <= 0;			
@@ -158,7 +167,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 		else
 		begin
 		
-			if(current[i] == 1 && state == 0)
+			if((current[i] == 1 || current_2[i]) && state == 0)
 			begin
 				input_char_flag <= 0;
 				rd_address <= cache_line_no;
@@ -205,8 +214,12 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			end
 			else if(state == 3)
 			begin
-				
-				if(range > 0)
+				if(range == 0 && flag == 0)
+				begin
+					accepting[i] <= 1'b1;
+					state <= 4;
+				end
+				else if(range > 0)
 				begin
 					if(flag == 0)
 					begin
@@ -240,16 +253,22 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 							
 							if(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 1)
 							begin
-								if(block_mem_state_info_transition[0] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[0] == input_char)
 									next[block_mem_state_info_target_state[0]] <= 1;
-							end
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[0] == input_char_2)
+									next_2[block_mem_state_info_target_state[0]] <= 1;
+ 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 2) ||
 								(block_offset_flag_0 == 1 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[1] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[1] == input_char)
 									next[block_mem_state_info_target_state[1]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[1] == input_char_2)
+									next_2[block_mem_state_info_target_state[1]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 3) ||
@@ -257,8 +276,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 2 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[2] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[2] == input_char)
 									next[block_mem_state_info_target_state[2]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[2] == input_char_2)
+									next_2[block_mem_state_info_target_state[2]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 4) ||
@@ -267,8 +289,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 3 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[3] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[3] == input_char)
 									next[block_mem_state_info_target_state[3]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[3] == input_char_2)
+									next_2[block_mem_state_info_target_state[3]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 5) ||
@@ -278,8 +303,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 4 && no_cached_blocks_flag_0 >= 1)
 							)							
 							begin
-								if(block_mem_state_info_transition[4] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[4] == input_char)
 									next[block_mem_state_info_target_state[4]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[4] == input_char_2)
+									next_2[block_mem_state_info_target_state[4]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 6) ||
@@ -290,8 +318,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 5 && no_cached_blocks_flag_0 >= 1)
 							)							
 							begin
-								if(block_mem_state_info_transition[5] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[5] == input_char)
 									next[block_mem_state_info_target_state[5]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[5] == input_char_2)
+									next_2[block_mem_state_info_target_state[5]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 7) ||
@@ -303,8 +334,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 6 && no_cached_blocks_flag_0 >= 1)
 							)							
 							begin
-								if(block_mem_state_info_transition[6] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[6] == input_char)
 									next[block_mem_state_info_target_state[6]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[6] == input_char_2)
+									next_2[block_mem_state_info_target_state[6]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 8) ||
@@ -317,8 +351,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 7 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[7] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[7] == input_char)
 									next[block_mem_state_info_target_state[7]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[7] == input_char_2)
+									next_2[block_mem_state_info_target_state[7]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 9) ||
@@ -332,8 +369,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 8 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[8] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[8] == input_char)
 									next[block_mem_state_info_target_state[8]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[8] == input_char_2)
+									next_2[block_mem_state_info_target_state[8]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 10) ||
@@ -348,8 +388,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 9 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[9] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[9] == input_char)
 									next[block_mem_state_info_target_state[9]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[9] == input_char_2)
+									next_2[block_mem_state_info_target_state[9]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 11) ||
@@ -365,8 +408,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 10 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[10] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[10] == input_char)
 									next[block_mem_state_info_target_state[10]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[10] == input_char_2)
+									next_2[block_mem_state_info_target_state[10]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 12) ||
@@ -383,8 +429,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 11 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[11] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[11] == input_char)
 									next[block_mem_state_info_target_state[11]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[11] == input_char_2)
+									next_2[block_mem_state_info_target_state[11]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 13) ||
@@ -402,8 +451,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 12 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[12] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[12] == input_char)
 									next[block_mem_state_info_target_state[12]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[11] == input_char_2)
+									next_2[block_mem_state_info_target_state[11]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 14) ||
@@ -422,8 +474,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 13 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[13] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[13] == input_char)
 									next[block_mem_state_info_target_state[13]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[13] == input_char_2)
+									next_2[block_mem_state_info_target_state[13]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 15) ||
@@ -443,8 +498,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 14 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[14] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[14] == input_char)
 									next[block_mem_state_info_target_state[14]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[14] == input_char_2)
+									next_2[block_mem_state_info_target_state[14]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 16) ||
@@ -465,8 +523,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 15 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[15] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[15] == input_char)
 									next[block_mem_state_info_target_state[15]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[15] == input_char_2)
+									next_2[block_mem_state_info_target_state[15]] <= 1;
 							end
 							
 							/********* First one till 15*******/
@@ -478,98 +539,146 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 							
 							if(no_cached_blocks_flag_1 > 0)
 							begin
-								if(block_mem_state_info_transition[0] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[0] == input_char)
 									next[block_mem_state_info_target_state[0]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[0] == input_char_2)
+									next_2[block_mem_state_info_target_state[0]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 1)
 							begin
-								if(block_mem_state_info_transition[1] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[1] == input_char)
 									next[block_mem_state_info_target_state[1]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[1] == input_char_2)
+									next_2[block_mem_state_info_target_state[1]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 2)
 							begin
-								if(block_mem_state_info_transition[2] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[2] == input_char)
 									next[block_mem_state_info_target_state[2]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[2] == input_char_2)
+									next_2[block_mem_state_info_target_state[2]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 3)
 							begin
-								if(block_mem_state_info_transition[3] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[3] == input_char)
 									next[block_mem_state_info_target_state[3]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[3] == input_char_2)
+									next_2[block_mem_state_info_target_state[3]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 4)
 							begin
-								if(block_mem_state_info_transition[4] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[4] == input_char)
 									next[block_mem_state_info_target_state[4]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[4] == input_char_2)
+									next_2[block_mem_state_info_target_state[4]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 5)
 							begin
-								if(block_mem_state_info_transition[5] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[5] == input_char)
 									next[block_mem_state_info_target_state[5]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[5] == input_char_2)
+									next_2[block_mem_state_info_target_state[5]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 6)
 							begin
-								if(block_mem_state_info_transition[6] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[6] == input_char)
 									next[block_mem_state_info_target_state[6]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[6] == input_char_2)
+									next_2[block_mem_state_info_target_state[6]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 7)
 							begin
-								if(block_mem_state_info_transition[7] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[7] == input_char)
 									next[block_mem_state_info_target_state[7]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[7] == input_char_2)
+									next_2[block_mem_state_info_target_state[7]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 8)
 							begin
-								if(block_mem_state_info_transition[8] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[8] == input_char)
 									next[block_mem_state_info_target_state[8]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[8] == input_char_2)
+									next_2[block_mem_state_info_target_state[8]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 9)
 							begin
-								if(block_mem_state_info_transition[9] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[9] == input_char)
 									next[block_mem_state_info_target_state[9]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[9] == input_char_2)
+									next_2[block_mem_state_info_target_state[9]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 10)
 							begin
-								if(block_mem_state_info_transition[10] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[10] == input_char)
 									next[block_mem_state_info_target_state[10]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[10] == input_char_2)
+									next_2[block_mem_state_info_target_state[10]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 11)
 							begin
-								if(block_mem_state_info_transition[11] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[11] == input_char)
 									next[block_mem_state_info_target_state[11]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[11] == input_char_2)
+									next_2[block_mem_state_info_target_state[11]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 12)
 							begin
-								if(block_mem_state_info_transition[12] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[12] == input_char)
 									next[block_mem_state_info_target_state[12]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[12] == input_char_2)
+									next_2[block_mem_state_info_target_state[12]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 13)
 							begin
-								if(block_mem_state_info_transition[13] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[13] == input_char)
 									next[block_mem_state_info_target_state[13]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[13] == input_char_2)
+									next_2[block_mem_state_info_target_state[13]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 14)
 							begin
-								if(block_mem_state_info_transition[14] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[14] == input_char)
 									next[block_mem_state_info_target_state[14]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[14] == input_char_2)
+									next_2[block_mem_state_info_target_state[14]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 15)
 							begin
-								if(block_mem_state_info_transition[15] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[15] == input_char)
 									next[block_mem_state_info_target_state[15]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[15] == input_char_2)
+									next_2[block_mem_state_info_target_state[15]] <= 1;
 							end
 							
 							/********* First one till 15*******/
@@ -580,98 +689,146 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 						begin
 							if(no_cached_blocks_flag_2 > 0)
 							begin
-								if(block_mem_state_info_transition[0] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[0] == input_char)
 									next[block_mem_state_info_target_state[0]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[0] == input_char_2)
+									next_2[block_mem_state_info_target_state[0]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 1)
 							begin
-								if(block_mem_state_info_transition[1] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[1] == input_char)
 									next[block_mem_state_info_target_state[1]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[1] == input_char_2)
+									next_2[block_mem_state_info_target_state[1]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 2)
 							begin
-								if(block_mem_state_info_transition[2] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[2] == input_char)
 									next[block_mem_state_info_target_state[2]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[2] == input_char_2)
+									next_2[block_mem_state_info_target_state[2]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 3)
 							begin
-								if(block_mem_state_info_transition[3] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[3] == input_char)
 									next[block_mem_state_info_target_state[3]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[3] == input_char_2)
+									next_2[block_mem_state_info_target_state[3]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 4)
 							begin
-								if(block_mem_state_info_transition[4] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[4] == input_char)
 									next[block_mem_state_info_target_state[4]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[4] == input_char_2)
+									next_2[block_mem_state_info_target_state[4]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 5)
 							begin
-								if(block_mem_state_info_transition[5] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[5] == input_char)
 									next[block_mem_state_info_target_state[5]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[5] == input_char_2)
+									next_2[block_mem_state_info_target_state[5]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 6)
 							begin
-								if(block_mem_state_info_transition[6] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[6] == input_char)
 									next[block_mem_state_info_target_state[6]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[6] == input_char_2)
+									next_2[block_mem_state_info_target_state[6]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 7)
 							begin
-								if(block_mem_state_info_transition[7] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[7] == input_char)
 									next[block_mem_state_info_target_state[7]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[7] == input_char_2)
+									next_2[block_mem_state_info_target_state[7]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 8)
 							begin
-								if(block_mem_state_info_transition[8] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[8] == input_char)
 									next[block_mem_state_info_target_state[8]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[8] == input_char_2)
+									next_2[block_mem_state_info_target_state[8]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 9)
 							begin
-								if(block_mem_state_info_transition[9] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[9] == input_char)
 									next[block_mem_state_info_target_state[9]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[9] == input_char_2)
+									next_2[block_mem_state_info_target_state[9]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 10)
 							begin
-								if(block_mem_state_info_transition[10] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[10] == input_char)
 									next[block_mem_state_info_target_state[10]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[10] == input_char_2)
+									next_2[block_mem_state_info_target_state[10]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 11)
 							begin
-								if(block_mem_state_info_transition[11] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[11] == input_char)
 									next[block_mem_state_info_target_state[11]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[11] == input_char_2)
+									next_2[block_mem_state_info_target_state[11]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 12)
 							begin
-								if(block_mem_state_info_transition[12] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[12] == input_char)
 									next[block_mem_state_info_target_state[12]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[12] == input_char_2)
+									next_2[block_mem_state_info_target_state[12]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 13)
 							begin
-								if(block_mem_state_info_transition[13] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[13] == input_char)
 									next[block_mem_state_info_target_state[13]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[13] == input_char_2)
+									next_2[block_mem_state_info_target_state[13]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 14)
 							begin
-								if(block_mem_state_info_transition[14] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[14] == input_char)
 									next[block_mem_state_info_target_state[14]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[14] == input_char_2)
+									next_2[block_mem_state_info_target_state[14]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 15)
 							begin
-								if(block_mem_state_info_transition[15] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[15] == input_char)
 									next[block_mem_state_info_target_state[15]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[15] == input_char_2)
+									next_2[block_mem_state_info_target_state[15]] <= 1;
 							end
 							
 							/********* First one till 15*******/
@@ -702,16 +859,22 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 					
 							if(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 1)
 							begin
-								if(block_mem_state_info_transition[0] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[0] == input_char)
 									next[block_mem_state_info_target_state[0]] <= 1;
-							end
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[0] == input_char_2)
+									next_2[block_mem_state_info_target_state[0]] <= 1;
+ 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 2) ||
 								(block_offset_flag_0 == 1 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[1] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[1] == input_char)
 									next[block_mem_state_info_target_state[1]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[1] == input_char_2)
+									next_2[block_mem_state_info_target_state[1]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 3) ||
@@ -719,8 +882,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 2 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[2] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[2] == input_char)
 									next[block_mem_state_info_target_state[2]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[2] == input_char_2)
+									next_2[block_mem_state_info_target_state[2]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 4) ||
@@ -729,8 +895,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 3 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[3] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[3] == input_char)
 									next[block_mem_state_info_target_state[3]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[3] == input_char_2)
+									next_2[block_mem_state_info_target_state[3]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 5) ||
@@ -740,8 +909,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 4 && no_cached_blocks_flag_0 >= 1)
 							)							
 							begin
-								if(block_mem_state_info_transition[4] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[4] == input_char)
 									next[block_mem_state_info_target_state[4]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[4] == input_char_2)
+									next_2[block_mem_state_info_target_state[4]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 6) ||
@@ -752,8 +924,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 5 && no_cached_blocks_flag_0 >= 1)
 							)							
 							begin
-								if(block_mem_state_info_transition[5] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[5] == input_char)
 									next[block_mem_state_info_target_state[5]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[5] == input_char_2)
+									next_2[block_mem_state_info_target_state[5]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 7) ||
@@ -765,8 +940,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 6 && no_cached_blocks_flag_0 >= 1)
 							)							
 							begin
-								if(block_mem_state_info_transition[6] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[6] == input_char)
 									next[block_mem_state_info_target_state[6]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[6] == input_char_2)
+									next_2[block_mem_state_info_target_state[6]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 8) ||
@@ -779,8 +957,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 7 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[7] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[7] == input_char)
 									next[block_mem_state_info_target_state[7]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[7] == input_char_2)
+									next_2[block_mem_state_info_target_state[7]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 9) ||
@@ -794,8 +975,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 8 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[8] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[8] == input_char)
 									next[block_mem_state_info_target_state[8]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[8] == input_char_2)
+									next_2[block_mem_state_info_target_state[8]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 10) ||
@@ -810,8 +994,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 9 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[9] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[9] == input_char)
 									next[block_mem_state_info_target_state[9]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[9] == input_char_2)
+									next_2[block_mem_state_info_target_state[9]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 11) ||
@@ -827,8 +1014,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 10 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[10] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[10] == input_char)
 									next[block_mem_state_info_target_state[10]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[10] == input_char_2)
+									next_2[block_mem_state_info_target_state[10]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 12) ||
@@ -845,8 +1035,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 11 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[11] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[11] == input_char)
 									next[block_mem_state_info_target_state[11]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[11] == input_char_2)
+									next_2[block_mem_state_info_target_state[11]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 13) ||
@@ -864,8 +1057,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 12 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[12] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[12] == input_char)
 									next[block_mem_state_info_target_state[12]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[11] == input_char_2)
+									next_2[block_mem_state_info_target_state[11]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 14) ||
@@ -884,8 +1080,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 13 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[13] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[13] == input_char)
 									next[block_mem_state_info_target_state[13]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[13] == input_char_2)
+									next_2[block_mem_state_info_target_state[13]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 15) ||
@@ -905,8 +1104,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 14 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[14] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[14] == input_char)
 									next[block_mem_state_info_target_state[14]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[14] == input_char_2)
+									next_2[block_mem_state_info_target_state[14]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 16) ||
@@ -927,8 +1129,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 15 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[15] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[15] == input_char)
 									next[block_mem_state_info_target_state[15]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[15] == input_char_2)
+									next_2[block_mem_state_info_target_state[15]] <= 1;
 							end
 							
 							/********* First one till 15*******/
@@ -947,98 +1152,146 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 					
 							if(no_cached_blocks_flag_2_prev > 0)
 							begin
-								if(block_mem_state_info_transition[0] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[0] == input_char)
 									next[block_mem_state_info_target_state[0]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[0] == input_char_2)
+									next_2[block_mem_state_info_target_state[0]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 1)
 							begin
-								if(block_mem_state_info_transition[1] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[1] == input_char)
 									next[block_mem_state_info_target_state[1]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[1] == input_char_2)
+									next_2[block_mem_state_info_target_state[1]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 2)
 							begin
-								if(block_mem_state_info_transition[2] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[2] == input_char)
 									next[block_mem_state_info_target_state[2]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[2] == input_char_2)
+									next_2[block_mem_state_info_target_state[2]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 3)
 							begin
-								if(block_mem_state_info_transition[3] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[3] == input_char)
 									next[block_mem_state_info_target_state[3]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[3] == input_char_2)
+									next_2[block_mem_state_info_target_state[3]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 4)
 							begin
-								if(block_mem_state_info_transition[4] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[4] == input_char)
 									next[block_mem_state_info_target_state[4]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[4] == input_char_2)
+									next_2[block_mem_state_info_target_state[4]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 5)
 							begin
-								if(block_mem_state_info_transition[5] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[5] == input_char)
 									next[block_mem_state_info_target_state[5]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[5] == input_char_2)
+									next_2[block_mem_state_info_target_state[5]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 6)
 							begin
-								if(block_mem_state_info_transition[6] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[6] == input_char)
 									next[block_mem_state_info_target_state[6]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[6] == input_char_2)
+									next_2[block_mem_state_info_target_state[6]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 7)
 							begin
-								if(block_mem_state_info_transition[7] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[7] == input_char)
 									next[block_mem_state_info_target_state[7]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[7] == input_char_2)
+									next_2[block_mem_state_info_target_state[7]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 8)
 							begin
-								if(block_mem_state_info_transition[8] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[8] == input_char)
 									next[block_mem_state_info_target_state[8]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[8] == input_char_2)
+									next_2[block_mem_state_info_target_state[8]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 9)
 							begin
-								if(block_mem_state_info_transition[9] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[9] == input_char)
 									next[block_mem_state_info_target_state[9]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[9] == input_char_2)
+									next_2[block_mem_state_info_target_state[9]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 10)
 							begin
-								if(block_mem_state_info_transition[10] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[10] == input_char)
 									next[block_mem_state_info_target_state[10]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[10] == input_char_2)
+									next_2[block_mem_state_info_target_state[10]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 11)
 							begin
-								if(block_mem_state_info_transition[11] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[11] == input_char)
 									next[block_mem_state_info_target_state[11]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[11] == input_char_2)
+									next_2[block_mem_state_info_target_state[11]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 12)
 							begin
-								if(block_mem_state_info_transition[12] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[12] == input_char)
 									next[block_mem_state_info_target_state[12]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[12] == input_char_2)
+									next_2[block_mem_state_info_target_state[12]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 13)
 							begin
-								if(block_mem_state_info_transition[13] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[13] == input_char)
 									next[block_mem_state_info_target_state[13]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[13] == input_char_2)
+									next_2[block_mem_state_info_target_state[13]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 14)
 							begin
-								if(block_mem_state_info_transition[14] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[14] == input_char)
 									next[block_mem_state_info_target_state[14]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[14] == input_char_2)
+									next_2[block_mem_state_info_target_state[14]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2_prev > 15)
 							begin
-								if(block_mem_state_info_transition[15] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[15] == input_char)
 									next[block_mem_state_info_target_state[15]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[15] == input_char_2)
+									next_2[block_mem_state_info_target_state[15]] <= 1;
 							end
 							
 							/********* First one till 15*******/
@@ -1048,98 +1301,146 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 						begin
 							if(no_cached_blocks_flag_1 > 0)
 							begin
-								if(block_mem_state_info_transition[0] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[0] == input_char)
 									next[block_mem_state_info_target_state[0]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[0] == input_char_2)
+									next_2[block_mem_state_info_target_state[0]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 1)
 							begin
-								if(block_mem_state_info_transition[1] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[1] == input_char)
 									next[block_mem_state_info_target_state[1]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[1] == input_char_2)
+									next_2[block_mem_state_info_target_state[1]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 2)
 							begin
-								if(block_mem_state_info_transition[2] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[2] == input_char)
 									next[block_mem_state_info_target_state[2]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[2] == input_char_2)
+									next_2[block_mem_state_info_target_state[2]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 3)
 							begin
-								if(block_mem_state_info_transition[3] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[3] == input_char)
 									next[block_mem_state_info_target_state[3]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[3] == input_char_2)
+									next_2[block_mem_state_info_target_state[3]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 4)
 							begin
-								if(block_mem_state_info_transition[4] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[4] == input_char)
 									next[block_mem_state_info_target_state[4]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[4] == input_char_2)
+									next_2[block_mem_state_info_target_state[4]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 5)
 							begin
-								if(block_mem_state_info_transition[5] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[5] == input_char)
 									next[block_mem_state_info_target_state[5]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[5] == input_char_2)
+									next_2[block_mem_state_info_target_state[5]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 6)
 							begin
-								if(block_mem_state_info_transition[6] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[6] == input_char)
 									next[block_mem_state_info_target_state[6]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[6] == input_char_2)
+									next_2[block_mem_state_info_target_state[6]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 7)
 							begin
-								if(block_mem_state_info_transition[7] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[7] == input_char)
 									next[block_mem_state_info_target_state[7]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[7] == input_char_2)
+									next_2[block_mem_state_info_target_state[7]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 8)
 							begin
-								if(block_mem_state_info_transition[8] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[8] == input_char)
 									next[block_mem_state_info_target_state[8]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[8] == input_char_2)
+									next_2[block_mem_state_info_target_state[8]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 9)
 							begin
-								if(block_mem_state_info_transition[9] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[9] == input_char)
 									next[block_mem_state_info_target_state[9]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[9] == input_char_2)
+									next_2[block_mem_state_info_target_state[9]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 10)
 							begin
-								if(block_mem_state_info_transition[10] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[10] == input_char)
 									next[block_mem_state_info_target_state[10]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[10] == input_char_2)
+									next_2[block_mem_state_info_target_state[10]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 11)
 							begin
-								if(block_mem_state_info_transition[11] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[11] == input_char)
 									next[block_mem_state_info_target_state[11]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[11] == input_char_2)
+									next_2[block_mem_state_info_target_state[11]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 12)
 							begin
-								if(block_mem_state_info_transition[12] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[12] == input_char)
 									next[block_mem_state_info_target_state[12]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[12] == input_char_2)
+									next_2[block_mem_state_info_target_state[12]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 13)
 							begin
-								if(block_mem_state_info_transition[13] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[13] == input_char)
 									next[block_mem_state_info_target_state[13]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[13] == input_char_2)
+									next_2[block_mem_state_info_target_state[13]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 14)
 							begin
-								if(block_mem_state_info_transition[14] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[14] == input_char)
 									next[block_mem_state_info_target_state[14]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[14] == input_char_2)
+									next_2[block_mem_state_info_target_state[14]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 15)
 							begin
-								if(block_mem_state_info_transition[15] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[15] == input_char)
 									next[block_mem_state_info_target_state[15]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[15] == input_char_2)
+									next_2[block_mem_state_info_target_state[15]] <= 1;
 							end
 							
 							/********* First one till 15*******/
@@ -1150,16 +1451,22 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 							
 							if(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 1)
 							begin
-								if(block_mem_state_info_transition[0] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[0] == input_char)
 									next[block_mem_state_info_target_state[0]] <= 1;
-							end
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[0] == input_char_2)
+									next_2[block_mem_state_info_target_state[0]] <= 1;
+ 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 2) ||
 								(block_offset_flag_0 == 1 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[1] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[1] == input_char)
 									next[block_mem_state_info_target_state[1]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[1] == input_char_2)
+									next_2[block_mem_state_info_target_state[1]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 3) ||
@@ -1167,8 +1474,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 2 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[2] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[2] == input_char)
 									next[block_mem_state_info_target_state[2]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[2] == input_char_2)
+									next_2[block_mem_state_info_target_state[2]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 4) ||
@@ -1177,8 +1487,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 3 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[3] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[3] == input_char)
 									next[block_mem_state_info_target_state[3]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[3] == input_char_2)
+									next_2[block_mem_state_info_target_state[3]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 5) ||
@@ -1188,8 +1501,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 4 && no_cached_blocks_flag_0 >= 1)
 							)							
 							begin
-								if(block_mem_state_info_transition[4] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[4] == input_char)
 									next[block_mem_state_info_target_state[4]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[4] == input_char_2)
+									next_2[block_mem_state_info_target_state[4]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 6) ||
@@ -1200,8 +1516,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 5 && no_cached_blocks_flag_0 >= 1)
 							)							
 							begin
-								if(block_mem_state_info_transition[5] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[5] == input_char)
 									next[block_mem_state_info_target_state[5]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[5] == input_char_2)
+									next_2[block_mem_state_info_target_state[5]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 7) ||
@@ -1213,8 +1532,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 6 && no_cached_blocks_flag_0 >= 1)
 							)							
 							begin
-								if(block_mem_state_info_transition[6] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[6] == input_char)
 									next[block_mem_state_info_target_state[6]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[6] == input_char_2)
+									next_2[block_mem_state_info_target_state[6]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 8) ||
@@ -1227,8 +1549,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 7 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[7] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[7] == input_char)
 									next[block_mem_state_info_target_state[7]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[7] == input_char_2)
+									next_2[block_mem_state_info_target_state[7]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 9) ||
@@ -1242,8 +1567,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 8 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[8] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[8] == input_char)
 									next[block_mem_state_info_target_state[8]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[8] == input_char_2)
+									next_2[block_mem_state_info_target_state[8]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 10) ||
@@ -1258,8 +1586,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 9 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[9] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[9] == input_char)
 									next[block_mem_state_info_target_state[9]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[9] == input_char_2)
+									next_2[block_mem_state_info_target_state[9]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 11) ||
@@ -1275,8 +1606,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 10 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[10] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[10] == input_char)
 									next[block_mem_state_info_target_state[10]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[10] == input_char_2)
+									next_2[block_mem_state_info_target_state[10]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 12) ||
@@ -1293,8 +1627,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 11 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[11] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[11] == input_char)
 									next[block_mem_state_info_target_state[11]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[11] == input_char_2)
+									next_2[block_mem_state_info_target_state[11]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 13) ||
@@ -1312,8 +1649,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 12 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[12] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[12] == input_char)
 									next[block_mem_state_info_target_state[12]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[11] == input_char_2)
+									next_2[block_mem_state_info_target_state[11]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 14) ||
@@ -1332,8 +1672,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 13 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[13] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[13] == input_char)
 									next[block_mem_state_info_target_state[13]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[13] == input_char_2)
+									next_2[block_mem_state_info_target_state[13]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 15) ||
@@ -1353,8 +1696,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 14 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[14] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[14] == input_char)
 									next[block_mem_state_info_target_state[14]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[14] == input_char_2)
+									next_2[block_mem_state_info_target_state[14]] <= 1;
 							end
 							
 							if(	(block_offset_flag_0 == 0 && no_cached_blocks_flag_0 >= 16) ||
@@ -1375,8 +1721,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 								(block_offset_flag_0 == 15 && no_cached_blocks_flag_0 >= 1)
 							)
 							begin
-								if(block_mem_state_info_transition[15] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[15] == input_char)
 									next[block_mem_state_info_target_state[15]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[15] == input_char_2)
+									next_2[block_mem_state_info_target_state[15]] <= 1;
 							end
 							
 							/********* First one till 15*******/
@@ -1389,100 +1738,149 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 						
 						if(flag_1_or_2 == 1)
 						begin
+							
 							if(no_cached_blocks_flag_1 > 0)
 							begin
-								if(block_mem_state_info_transition[0] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[0] == input_char)
 									next[block_mem_state_info_target_state[0]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[0] == input_char_2)
+									next_2[block_mem_state_info_target_state[0]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 1)
 							begin
-								if(block_mem_state_info_transition[1] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[1] == input_char)
 									next[block_mem_state_info_target_state[1]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[1] == input_char_2)
+									next_2[block_mem_state_info_target_state[1]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 2)
 							begin
-								if(block_mem_state_info_transition[2] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[2] == input_char)
 									next[block_mem_state_info_target_state[2]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[2] == input_char_2)
+									next_2[block_mem_state_info_target_state[2]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 3)
 							begin
-								if(block_mem_state_info_transition[3] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[3] == input_char)
 									next[block_mem_state_info_target_state[3]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[3] == input_char_2)
+									next_2[block_mem_state_info_target_state[3]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 4)
 							begin
-								if(block_mem_state_info_transition[4] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[4] == input_char)
 									next[block_mem_state_info_target_state[4]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[4] == input_char_2)
+									next_2[block_mem_state_info_target_state[4]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 5)
 							begin
-								if(block_mem_state_info_transition[5] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[5] == input_char)
 									next[block_mem_state_info_target_state[5]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[5] == input_char_2)
+									next_2[block_mem_state_info_target_state[5]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 6)
 							begin
-								if(block_mem_state_info_transition[6] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[6] == input_char)
 									next[block_mem_state_info_target_state[6]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[6] == input_char_2)
+									next_2[block_mem_state_info_target_state[6]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 7)
 							begin
-								if(block_mem_state_info_transition[7] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[7] == input_char)
 									next[block_mem_state_info_target_state[7]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[7] == input_char_2)
+									next_2[block_mem_state_info_target_state[7]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 8)
 							begin
-								if(block_mem_state_info_transition[8] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[8] == input_char)
 									next[block_mem_state_info_target_state[8]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[8] == input_char_2)
+									next_2[block_mem_state_info_target_state[8]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 9)
 							begin
-								if(block_mem_state_info_transition[9] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[9] == input_char)
 									next[block_mem_state_info_target_state[9]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[9] == input_char_2)
+									next_2[block_mem_state_info_target_state[9]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 10)
 							begin
-								if(block_mem_state_info_transition[10] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[10] == input_char)
 									next[block_mem_state_info_target_state[10]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[10] == input_char_2)
+									next_2[block_mem_state_info_target_state[10]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 11)
 							begin
-								if(block_mem_state_info_transition[11] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[11] == input_char)
 									next[block_mem_state_info_target_state[11]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[11] == input_char_2)
+									next_2[block_mem_state_info_target_state[11]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 12)
 							begin
-								if(block_mem_state_info_transition[12] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[12] == input_char)
 									next[block_mem_state_info_target_state[12]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[12] == input_char_2)
+									next_2[block_mem_state_info_target_state[12]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 13)
 							begin
-								if(block_mem_state_info_transition[13] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[13] == input_char)
 									next[block_mem_state_info_target_state[13]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[13] == input_char_2)
+									next_2[block_mem_state_info_target_state[13]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 14)
 							begin
-								if(block_mem_state_info_transition[14] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[14] == input_char)
 									next[block_mem_state_info_target_state[14]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[14] == input_char_2)
+									next_2[block_mem_state_info_target_state[14]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_1 > 15)
 							begin
-								if(block_mem_state_info_transition[15] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[15] == input_char)
 									next[block_mem_state_info_target_state[15]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[15] == input_char_2)
+									next_2[block_mem_state_info_target_state[15]] <= 1;
 							end
 							
 							/********* First one till 15*******/
@@ -1493,98 +1891,146 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 						begin
 							if(no_cached_blocks_flag_2 > 0)
 							begin
-								if(block_mem_state_info_transition[0] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[0] == input_char)
 									next[block_mem_state_info_target_state[0]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[0] == input_char_2)
+									next_2[block_mem_state_info_target_state[0]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 1)
 							begin
-								if(block_mem_state_info_transition[1] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[1] == input_char)
 									next[block_mem_state_info_target_state[1]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[1] == input_char_2)
+									next_2[block_mem_state_info_target_state[1]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 2)
 							begin
-								if(block_mem_state_info_transition[2] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[2] == input_char)
 									next[block_mem_state_info_target_state[2]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[2] == input_char_2)
+									next_2[block_mem_state_info_target_state[2]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 3)
 							begin
-								if(block_mem_state_info_transition[3] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[3] == input_char)
 									next[block_mem_state_info_target_state[3]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[3] == input_char_2)
+									next_2[block_mem_state_info_target_state[3]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 4)
 							begin
-								if(block_mem_state_info_transition[4] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[4] == input_char)
 									next[block_mem_state_info_target_state[4]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[4] == input_char_2)
+									next_2[block_mem_state_info_target_state[4]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 5)
 							begin
-								if(block_mem_state_info_transition[5] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[5] == input_char)
 									next[block_mem_state_info_target_state[5]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[5] == input_char_2)
+									next_2[block_mem_state_info_target_state[5]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 6)
 							begin
-								if(block_mem_state_info_transition[6] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[6] == input_char)
 									next[block_mem_state_info_target_state[6]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[6] == input_char_2)
+									next_2[block_mem_state_info_target_state[6]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 7)
 							begin
-								if(block_mem_state_info_transition[7] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[7] == input_char)
 									next[block_mem_state_info_target_state[7]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[7] == input_char_2)
+									next_2[block_mem_state_info_target_state[7]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 8)
 							begin
-								if(block_mem_state_info_transition[8] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[8] == input_char)
 									next[block_mem_state_info_target_state[8]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[8] == input_char_2)
+									next_2[block_mem_state_info_target_state[8]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 9)
 							begin
-								if(block_mem_state_info_transition[9] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[9] == input_char)
 									next[block_mem_state_info_target_state[9]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[9] == input_char_2)
+									next_2[block_mem_state_info_target_state[9]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 10)
 							begin
-								if(block_mem_state_info_transition[10] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[10] == input_char)
 									next[block_mem_state_info_target_state[10]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[10] == input_char_2)
+									next_2[block_mem_state_info_target_state[10]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 11)
 							begin
-								if(block_mem_state_info_transition[11] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[11] == input_char)
 									next[block_mem_state_info_target_state[11]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[11] == input_char_2)
+									next_2[block_mem_state_info_target_state[11]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 12)
 							begin
-								if(block_mem_state_info_transition[12] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[12] == input_char)
 									next[block_mem_state_info_target_state[12]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[12] == input_char_2)
+									next_2[block_mem_state_info_target_state[12]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 13)
 							begin
-								if(block_mem_state_info_transition[13] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[13] == input_char)
 									next[block_mem_state_info_target_state[13]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[13] == input_char_2)
+									next_2[block_mem_state_info_target_state[13]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 14)
 							begin
-								if(block_mem_state_info_transition[14] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[14] == input_char)
 									next[block_mem_state_info_target_state[14]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[14] == input_char_2)
+									next_2[block_mem_state_info_target_state[14]] <= 1;
 							end
 							
 							if(no_cached_blocks_flag_2 > 15)
 							begin
-								if(block_mem_state_info_transition[15] == input_char)
+								if(current[i] == 1 && block_mem_state_info_transition[15] == input_char)
 									next[block_mem_state_info_target_state[15]] <= 1;
+									
+								if(current_2[i] == 1 && block_mem_state_info_transition[15] == input_char_2)
+									next_2[block_mem_state_info_target_state[15]] <= 1;
 							end
 							
 							/********* First one till 15*******/
@@ -1613,26 +2059,33 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			
 				if(i<size-1)
 				begin
+					input_char_flag <= 0;
 					i <= i + 1;
 					//state <= 0;
 				end				
 				else
 				begin
 					current <= ~(~next);
+					current_2 <= ~(~next_2);
 			
 					for(iter = 0; iter < size_range; iter = iter+1)
+					begin
 						if(next[iter] == 1)
-						begin
 							active[iter] <= active[iter] + 1;
-						end
+						
+						if(next_2[iter] == 1)
+							active_2[iter] <= active[iter] + 1;
+					end
 					
 					next <= 0;
+					next_2 <= 0;
+					
 					i <= 0;
 					input_char_flag <= 1; 
 				end
 				
 			end
-			else if(current[i] != 1 && state == 0)
+			else if(current[i] != 1 && current_2[i] !=1 && state == 0)
 			begin
 				if(i<size-1)
 				begin
@@ -1642,18 +2095,22 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 				else
 				begin
 					current <= ~(~next);
+					current_2 <= ~(~next_2);
 			
 					for(iter = 0; iter < size_range; iter = iter+1)
+					begin
 						if(next[iter] == 1)
-						begin
 							active[iter] <= active[iter] + 1;
-						end
 						
+						if(next_2[iter] == 1)
+							active_2[iter] <= active[iter] + 1;
+					end
+					
 					next <= 0;
+					next_2 <= 0;
 					
 					i <= 0;
-					input_char_flag <= 1; 
-					
+					input_char_flag <= 1;  
 				end
 			end
 			
