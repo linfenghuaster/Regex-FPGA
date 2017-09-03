@@ -29,15 +29,15 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 	input	[7:0]		input_char;
 	input	[7:0]		input_char_2;
 	
-	output 	[16:0]		rd_address;
+	output 	[23:0]		rd_address;
 	output 				input_char_flag;
 
-	reg 	[16:0]		rd_address;
+	reg 	[23:0]		rd_address;
 	reg 				input_char_flag;
 	
 	
 	integer iter;
-	parameter size_range = 7;
+	parameter size_range = 0;
 	
 	// internal signals local to the block
 	reg	[24:0]		offset;
@@ -45,30 +45,34 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 	reg [23:0]		first;
 	// reg [9:0]		last;
 	reg [size_range - 1:0]			next;
+	reg [size_range - 1:0]			current;		//current and next state bitmaps for stream 1
 	reg [size_range - 1:0]			next_2;
-	reg [size_range - 1:0]			current;
-	reg [size_range - 1:0]			current_2;
-	reg [size_range - 1:0]			accepting;
+	reg [size_range - 1:0]			current_2;		//current and next state bitmaps for stream 1
 	
-	reg	[7:0]		block_mem_state_info_transition		[15:0];
+	reg [size_range - 1:0]			accepting;		//tracking the terminal states
+	
+	reg	[7:0]		block_mem_state_info_transition		[15:0]; 
 	reg	[23:0]		block_mem_state_info_target_state	[15:0];
+	
+	//for calculating number of transitions for each state
 	reg [23:0]		range;
 	reg [23:0]		range_last;
 	reg [23:0]		range_int;
 	reg [23:0]		up_counter;
 	reg [23:0]		up_counter_int;
-	// reg [7:0]		input_char;
+	
 	reg [2:0]		state;
 	reg [24:0]		rd_address_int;
 	reg 			flag_iter_check;
 	reg 			flag_check;
-	reg [23:0]		active 	[size_range - 1:0];
-	reg [23:0]		active_2 	[size_range - 1:0];
-	// reg 			flag_state_reset;
+	
+	reg [19:0]		active 	[size_range - 1:0];
+	reg [19:0]		active_2 	[size_range - 1:0];
+	
 	reg 			range_2_state;
 	reg 			range_1_state;
 	
-	reg [23:0]		i;
+	reg [19:0]		i;				// allowing upto 1 million states
 	
 	// adding parallel part for caching
 	
@@ -106,7 +110,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 	parameter mem13_e = mem12_e + 32;  	//416;
 	parameter mem14_e = mem13_e + 32;  	//448;
 	parameter mem15_e = mem14_e + 32;  	//480;
-	parameter mem16_e = mem15_e + 32;
+	parameter mem16_e = mem15_e + 32;	//512
 	
 	
 	reg [31:0]		cache	[15:0];
@@ -132,12 +136,14 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 	
 	always@(posedge clk)
 	begin
+	
+		//Reset behaviour and initialization
 		if(reset)
 		begin
 			
 			i <= 0;
 			state <= 0;
-			//flag <= 0;
+			
 			input_char_flag <= 1;
 			
 			range_2_state <= 0;
@@ -167,7 +173,8 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 		end
 		else
 		begin
-		
+			
+			//checking if the given state 'i' is currently active or not
 			if((current[i] == 1 || current_2[i] == 1) && state == 0)
 			begin
 				input_char_flag <= 0;
@@ -178,6 +185,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			end
 			else if(state == 1)
 			begin
+				//for special case where the for calculation the range, the lower margin is the 16th element of the caches line
 				if(block_offset_reg == 15)
 				begin
 					rd_address <= rd_address + 1;
@@ -186,6 +194,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			end
 			else if(state == 2)
 			begin
+				
 				if(block_offset_reg != 15)
 				begin
 					range <= cache[block_offset_plus_one_reg] - cache[block_offset_reg];
@@ -195,6 +204,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 				end
 				else 
 				begin
+					//waiting for the newly requested additional cache block
 					if(range_next == 0)
 					begin
 						range_next <= 1;
@@ -208,7 +218,6 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 						up_counter <= cache_temp;
 						flag <= 0;
 						state <= 3;
-						
 					end
 				end
 				check <= 0;
@@ -217,6 +226,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			begin
 				if(range == 0 && flag == 0)
 				begin
+					//noting down that the state is an accepting state.
 					accepting[i] <= 1'b1;
 					state <= 4;
 				end
@@ -224,6 +234,8 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 				begin
 					if(flag == 0)
 					begin
+					
+						//fetching the cache line with the transitions of the given state
 						rd_address <= cache_line_no;
 						flag_1_or_2 <= 0;
 						block_offset_flag_0 <= block_offset;
@@ -249,6 +261,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 					else if(flag == 2)
 					begin
 						
+						// traversing in a 16-wide parallel lane for the line fetched in flag = 0 state
 						if(flag_2 == 0)
 						begin
 							
@@ -535,6 +548,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 							
 							flag_2 <= 1;
 						end
+						// traversing in a 16-wide parallel lane for the line fetched in flag = 1 state
 						else if(flag_2 <= 1)
 						begin
 							
@@ -686,6 +700,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 							
 							flag_2 <= 2;
 						end
+						// traversing in a 16-wide parallel lane for the line fetched in flag = 2 state
 						else if(flag_2 <= 2)
 						begin
 							if(no_cached_blocks_flag_2 > 0)
@@ -855,6 +870,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 					end
 					else if(flag == 1 && range_1_state == 1)
 					begin
+						// traversing in a 16-wide parallel lane for the line fetched in flag = 0 state
 						if(flag_1_or_2 == 0)
 						begin
 					
@@ -1147,7 +1163,8 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 					end
 					else if(flag == 2 && range_2_state == 0)
 					begin
-					
+						
+						// traversing in a 16-wide parallel lane for the line fetched in flag = 1 state but is compared here because the range reached 0 
 						if(flag_2 == 2)
 						begin
 					
@@ -1297,7 +1314,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 							
 							/********* First one till 15*******/
 						end
-						
+						// traversing in a 16-wide parallel lane for the line fetched in flag = 1 state
 						if(flag_2 == 1)
 						begin
 							if(no_cached_blocks_flag_1 > 0)
@@ -1446,7 +1463,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 							
 							/********* First one till 15*******/
 						end
-				
+						// traversing in a 16-wide parallel lane for the line fetched in flag = 0 state
 						if(flag_1_or_2 == 1)
 						begin
 							
@@ -1737,6 +1754,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 					else if(flag == 2 && range_2_state == 1)
 					begin
 						
+						// traversing in a 16-wide parallel lane for the line fetched in flag = 1 state
 						if(flag_1_or_2 == 1)
 						begin
 							
@@ -1887,7 +1905,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 							/********* First one till 15*******/
 							
 						end
-						
+						// traversing in a 16-wide parallel lane for the line fetched in flag = 2 state
 						if(flag_1_or_2 == 2)
 						begin
 							if(no_cached_blocks_flag_2 > 0)
@@ -2060,12 +2078,12 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			
 				if(i<size-1)
 				begin
-					//input_char_flag <= 0;
+					//check for next state
 					i <= i + 1;
-					//state <= 0;
 				end				
 				else
 				begin
+					//all states traversed, fetch a new character.
 					current <= ~(~next);
 					current_2 <= ~(~next_2);
 			
@@ -2082,7 +2100,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 					next_2 <= 0;
 					
 					i <= 0;
-					input_char_flag <= 1; 
+					input_char_flag <= 1;
 				end
 				
 			end
@@ -2090,11 +2108,13 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			begin
 				if(i<size-1)
 				begin
+					//check for next state
 					input_char_flag <= 0;
 					i <= i + 1;
 				end				
 				else
 				begin
+					//all states traversed, fetch a new character.
 					current <= ~(~next);
 					current_2 <= ~(~next_2);
 			
@@ -2125,7 +2145,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 		
 		rd_address_int = 32'bz;
 		block_offset = 4'bz;
-		block_offset_plus_one = 4'bz;
+		block_offset_plus_one = 5'bz;
 		cache_line_no = 19'bz;
 		
 		if((current[i] == 1 || current_2[i] == 1) && state ==0)
