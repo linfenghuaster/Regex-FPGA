@@ -5,6 +5,8 @@ module Blk_Mem_tb;
 	reg [7:0] 	input_char;
 	reg [7:0] 	input_char_2;
 	reg 		input_char_flag;
+	reg 		accepting_match_flag;
+	reg 		accepting_match_flag_2;
 	
 	reg tb_clk = 1;
 	wire [511:0] tb_rd_bus;
@@ -13,14 +15,17 @@ module Blk_Mem_tb;
 	reg [23:0]	size;
 	reg [7:0]	data_read_90 [200000:0];
 	reg [7:0]	data_read_95 [200000:0];
-	integer m = 0, i, h;
-	integer cycles = 0;
+	int m = 0, h;
+	int cycles = 0;
+	logic 	[19:0] 	match_count[6:0];
+	logic 	[19:0] 	match_count_2[6:0];
+	reg 	[19:0] 	i;
 	
     always  #5  tb_clk = ~tb_clk;
 	
 	initial
 	begin
-	
+		
 		#2
 		reset = 1;
 		h = 1;
@@ -30,6 +35,12 @@ module Blk_Mem_tb;
 		#10
 		reset = 0;
 		size = 7;
+		
+		for(int p=0; p < size; p=p+1)
+		begin
+			match_count[p] = 0;
+			match_count_2[p] = 0;
+		end
 
 	end
 	
@@ -45,10 +56,26 @@ module Blk_Mem_tb;
 			m = m + 1;
 		end
 		
-		if(reset == 0 && m == 201)
+		if(accepting_match_flag == 1)
+		begin
+			match_count[i] = match_count[i] + 1;
+		end
+		
+		if(accepting_match_flag_2 == 1)
+		begin
+			match_count_2[i] = match_count_2[i] + 1;
+		end
+		
+		if(reset == 0 && m == 1002)
 		begin	
 			
 			#20;
+			foreach (match_count[p])
+				$display("match_count[%d] = %d", p, match_count[p]);
+			
+			foreach (match_count_2[p])
+				$display("match_count_[%d] = %d", p, match_count_2[p]);
+				
 			reset = 1;
 			$display($time,"\nTotal no. cycles: %d", cycles);
 			$finish;
@@ -60,7 +87,7 @@ module Blk_Mem_tb;
 		.BRAM_PORTA_clk(tb_clk),
 		.BRAM_PORTA_dout(tb_rd_bus));
 		
-	CSR_traversal C1 
+	CSR_traversal #(.size_range(7)) C1 
 		(.clk(tb_clk),
 		.reset(reset),
 		.size(size), 
@@ -68,6 +95,10 @@ module Blk_Mem_tb;
 		.rd_bus(tb_rd_bus), 
 		.input_char_flag(input_char_flag),
 		.input_char(input_char),
-		.input_char_2(input_char_2));
+		.input_char_2(input_char_2),
+		.i(i),
+		.accepting_match_flag(accepting_match_flag),
+		.accepting_match_flag_2(accepting_match_flag_2)
+		);
 	
 endmodule

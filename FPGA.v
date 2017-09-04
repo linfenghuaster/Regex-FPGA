@@ -19,7 +19,7 @@
 ********************************************************/
 `timescale 1 ns/1 ps
 
-module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, input_char, input_char_2);
+module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, input_char, input_char_2, i, accepting_match_flag, accepting_match_flag_2);
 
 	// interface signals
 	input	[23:0]		size;
@@ -31,10 +31,15 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 	
 	output 	[23:0]		rd_address;
 	output 				input_char_flag;
+	output	[19:0]		i;
+	output				accepting_match_flag;
+	output				accepting_match_flag_2;
 
 	reg 	[23:0]		rd_address;
 	reg 				input_char_flag;
-	
+	reg		[19:0]		i;		// allowing upto 1 million states
+	reg 				accepting_match_flag;
+	reg 				accepting_match_flag_2;
 	
 	integer iter;
 	parameter size_range = 0;
@@ -71,8 +76,6 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 	
 	reg 			range_2_state;
 	reg 			range_1_state;
-	
-	reg [19:0]		i;				// allowing upto 1 million states
 	
 	// adding parallel part for caching
 	
@@ -145,6 +148,8 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			state <= 0;
 			
 			input_char_flag <= 1;
+			accepting_match_flag <= 0;
+			accepting_match_flag_2 <= 0;
 			
 			range_2_state <= 0;
 			range_1_state <= 0;
@@ -227,7 +232,18 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 				if(range == 0 && flag == 0)
 				begin
 					//noting down that the state is an accepting state.
-					accepting[i] <= 1'b1;
+					accepting[i] <= 1;
+					
+					if(current[i] == 1)
+					begin
+						accepting_match_flag <= 1;
+					end
+					
+					if(current_2[i] == 1)
+					begin
+						accepting_match_flag_2 <= 1;
+					end
+					
 					state <= 4;
 				end
 				else if(range > 0)
@@ -2073,9 +2089,11 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			else if(state == 4)
 			begin
 				
+				accepting_match_flag <= 0;
+				accepting_match_flag_2 <= 0;
 				flag_2 <= 0;
 				state <= 0;
-			
+				
 				if(i<size-1)
 				begin
 					//check for next state
@@ -2084,8 +2102,8 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 				else
 				begin
 					//all states traversed, fetch a new character.
-					current <= ~(~next);
-					current_2 <= ~(~next_2);
+					current <= next;
+					current_2 <= next_2;
 			
 					for(iter = 0; iter < size_range; iter = iter+1)
 					begin
@@ -2106,6 +2124,7 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			end
 			else if(current[i] != 1 && current_2[i] !=1 && state == 0)
 			begin
+				
 				if(i<size-1)
 				begin
 					//check for next state
@@ -2115,8 +2134,8 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 				else
 				begin
 					//all states traversed, fetch a new character.
-					current <= ~(~next);
-					current_2 <= ~(~next_2);
+					current <= next;
+					current_2 <= next_2;
 			
 					for(iter = 0; iter < size_range; iter = iter+1)
 					begin
