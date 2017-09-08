@@ -13,13 +13,15 @@ module Blk_Mem_tb;
 	wire [16:0] tb_addr;
 	reg 		reset;
 	reg [23:0]	size;
-	reg [7:0]	data_read_90 [200000:0];
-	reg [7:0]	data_read_95 [200000:0];
+	reg [7:0]	data_read_lo [200000:0];
+	reg [7:0]	data_read_hi [200000:0];
 	int m = 0, h;
 	int cycles = 0;
-	logic 	[19:0] 	match_count[6:0];
-	logic 	[19:0] 	match_count_2[6:0];
+	parameter size_range = 9514;
+	logic 	[9:0] 	match_count[size_range - 1:0];
+	logic 	[9:0] 	match_count_2[size_range - 1:0];
 	reg 	[19:0] 	i;
+	integer fp;
 	
     always  #5  tb_clk = ~tb_clk;
 	
@@ -29,12 +31,12 @@ module Blk_Mem_tb;
 		#2
 		reset = 1;
 		h = 1;
-		$readmemh("input_trace_90.txt",data_read_90);
-		$readmemh("input_trace_95.txt",data_read_95);
-		
+		$readmemh("input_trace_lo.mem",data_read_lo);
+		$readmemh("input_trace_hi.mem",data_read_hi);
+				
 		#10
 		reset = 0;
-		size = 7;
+		size = size_range;
 		
 		for(int p=0; p < size; p=p+1)
 		begin
@@ -51,8 +53,8 @@ module Blk_Mem_tb;
 		if(input_char_flag == 1)
 		begin
 			#1
-			input_char = data_read_90[m];
-			input_char_2 = data_read_95[m];
+			input_char = data_read_lo[m];
+			input_char_2 = data_read_hi[m];
 			m = m + 1;
 		end
 		
@@ -66,15 +68,17 @@ module Blk_Mem_tb;
 			match_count_2[i] = match_count_2[i] + 1;
 		end
 		
-		if(reset == 0 && m == 1002)
+		if(reset == 0 && m == 200000)
 		begin	
-			
+					
 			#20;
 			foreach (match_count[p])
-				$display("match_count[%d] = %d", p, match_count[p]);
+			    if(match_count[p] !== 0)
+			    	$display("match_count[%d] = %d", p, match_count[p]);
 			
 			foreach (match_count_2[p])
-				$display("match_count_[%d] = %d", p, match_count_2[p]);
+			    if(match_count_2[p] !== 0)
+			    	$display("match_count_2[%d] = %d", p, match_count_2[p]);
 				
 			reset = 1;
 			$display($time,"\nTotal no. cycles: %d", cycles);
@@ -87,7 +91,7 @@ module Blk_Mem_tb;
 		.BRAM_PORTA_clk(tb_clk),
 		.BRAM_PORTA_dout(tb_rd_bus));
 		
-	CSR_traversal #(.size_range(7)) C1 
+	CSR_traversal #(.size_range(size_range)) C1 
 		(.clk(tb_clk),
 		.reset(reset),
 		.size(size), 

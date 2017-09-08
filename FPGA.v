@@ -71,8 +71,8 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 	reg 			flag_iter_check;
 	reg 			flag_check;
 	
-	reg [19:0]		active 	[size_range - 1:0];
-	reg [19:0]		active_2 	[size_range - 1:0];
+	//reg [19:0]		active 	[size_range - 1:0];
+	//reg [19:0]		active_2 	[size_range - 1:0];
 	
 	reg 			range_2_state;
 	reg 			range_1_state;
@@ -162,16 +162,16 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 			next_2 <= 0;
 			accepting <= 0;
 			
-			for(iter = 1; iter < size_range; iter = iter + 1)
+			/*for(iter = 1; iter < size_range; iter = iter + 1)
 			begin
 				active_2[iter] <= 0;
 				active[iter] <= 0;
-			end
+			end*/
 			
 			current[0] <= 1;
 			current_2[0] <= 1;
-			active[0] <= 1;
-			active_2[0] <= 1;
+			//active[0] <= 1;
+			//active_2[0] <= 1;
 			
 			range <= 0;
 			flag_check <= 0;			
@@ -2105,14 +2105,14 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 					current <= next;
 					current_2 <= next_2;
 			
-					for(iter = 0; iter < size_range; iter = iter+1)
+					/*for(iter = 0; iter < size_range; iter = iter+1)
 					begin
 						if(next[iter] == 1)
 							active[iter] <= active[iter] + 1;
 						
 						if(next_2[iter] == 1)
 							active_2[iter] <= active_2[iter] + 1;
-					end
+					end*/
 					
 					next <= 0;
 					next_2 <= 0;
@@ -2137,14 +2137,14 @@ module CSR_traversal (clk, reset, size, rd_address, rd_bus, input_char_flag, inp
 					current <= next;
 					current_2 <= next_2;
 			
-					for(iter = 0; iter < size_range; iter = iter+1)
+					/*for(iter = 0; iter < size_range; iter = iter+1)
 					begin
 						if(next[iter] == 1)
 							active[iter] <= active[iter] + 1;
 						
 						if(next_2[iter] == 1)
 							active_2[iter] <= active_2[iter] + 1;
-					end
+					end*/
 					
 					next <= 0;
 					next_2 <= 0;
